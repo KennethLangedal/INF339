@@ -12,6 +12,9 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank); // get current process id
     MPI_Comm_size(MPI_COMM_WORLD, &size); // get number of processes
 
+    MPI_Barrier(MPI_COMM_WORLD);
+    double t0 = MPI_Wtime();
+
     if (argc != 2)
     {
         printf("Give one argument to use as scale\n");
@@ -44,10 +47,10 @@ int main(int argc, char **argv)
     double *b = (double *)aligned_alloc(32, sizeof(double) * N);
 
     MPI_Barrier(MPI_COMM_WORLD);
-
-    double t0 = MPI_Wtime();
-    MPI_Scatter(x, columns, MPI_DOUBLE, x, columns, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     double t1 = MPI_Wtime();
+
+    MPI_Scatter(x, columns, MPI_DOUBLE, x, columns, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    double t2 = MPI_Wtime();
 
 #ifndef AVX
     for (size_t i = 0; i < N; i++)
@@ -74,13 +77,14 @@ int main(int argc, char **argv)
 #endif
 
     MPI_Barrier(MPI_COMM_WORLD);
+    double t3 = MPI_Wtime();
 
-    double t2 = MPI_Wtime();
     if (rank == 0)
         MPI_Reduce(MPI_IN_PLACE, b, N, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     else
         MPI_Reduce(b, b, N, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    double t3 = MPI_Wtime();
+
+    double t4 = MPI_Wtime();
 
     if (rank == 0) // Validate results
     {
@@ -93,7 +97,7 @@ int main(int argc, char **argv)
             error += (target - b[i]) * (target - b[i]);
         }
 
-        printf("%lf %lf %lf %lf\n", t1 - t0, t2 - t1, t3 - t2, error);
+        printf("%lf %lf %lf %lf %lf %lf\n", t4 - t1, t1 - t0, t2 - t1, t3 - t2, t4 - t3, error);
     }
 
     free(b);
