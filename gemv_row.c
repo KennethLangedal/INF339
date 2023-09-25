@@ -14,60 +14,60 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank); // get current process id
     MPI_Comm_size(MPI_COMM_WORLD, &size); // get number of processes
 
-    int N = 1 << scale;
-    int rows = N / size;
+    size_t N = 1 << scale;
+    size_t rows = N / size;
 
-    // Construct local part of M
-    double *M = (double *)aligned_alloc(32, sizeof(double) * rows * N);
+    // Construct local part of A
+    double *A = (double *)aligned_alloc(32, sizeof(double) * rows * N);
     for (int i = 0; i < rows; i++)
         for (int j = 0; j < N; j++)
-            M[i * N + j] = rank * rows + i + j;
+            A[i * N + j] = rank * rows + i + j;
 
-    double *V = (double *)aligned_alloc(32, sizeof(double) * N);
+    double *x = (double *)aligned_alloc(32, sizeof(double) * N);
     if (rank == 0)
     {
         for (int i = 0; i < N; i++)
-            V[i] = i;
+            x[i] = i;
     }
 
-    double *C;
+    double *b;
     if (rank == 0)
-        C = (double *)aligned_alloc(32, sizeof(double) * N);
+        b = (double *)aligned_alloc(32, sizeof(double) * N);
     else
-        C = (double *)aligned_alloc(32, sizeof(double) * rows);
+        b = (double *)aligned_alloc(32, sizeof(double) * rows);
 
     MPI_Barrier(MPI_COMM_WORLD);
 
     double t0 = MPI_Wtime();
-    MPI_Bcast(V, N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(x, N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     double t1 = MPI_Wtime();
-
-    // for (int i = 0; i < rows; i++)
-    // {
-    //     C[i] = 0.0;
-    //     for (int j = 0; j < N; j++)
-    //     {
-    //         C[i] += M[i * N + j] * V[j];
-    //     }
-    // }
 
     for (int i = 0; i < rows; i++)
     {
-        v4df c = {0.0, 0.0, 0.0, 0.0};
-        for (int j = 0; j < N; j += 4)
+        b[i] = 0.0;
+        for (int j = 0; j < N; j++)
         {
-            v4df m = _mm256_load_pd(M + i * N + j);
-            v4df v = _mm256_load_pd(V + j);
-
-            c = m * v + c;
+            b[i] += A[i * N + j] * x[j];
         }
-        C[i] = c[0] + c[1] + c[2] + c[3];
     }
+
+    // for (int i = 0; i < rows; i++)
+    // {
+    //     v4df c = {0.0, 0.0, 0.0, 0.0};
+    //     for (int j = 0; j < N; j += 4)
+    //     {
+    //         v4df m = _mm256_load_pd(A + i * N + j);
+    //         v4df v = _mm256_load_pd(x + j);
+
+    //         c = m * v + c;
+    //     }
+    //     b[i] = c[0] + c[1] + c[2] + c[3];
+    // }
 
     MPI_Barrier(MPI_COMM_WORLD);
 
     double t2 = MPI_Wtime();
-    MPI_Gather(C, rows, MPI_DOUBLE, C, rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gather(b, rows, MPI_DOUBLE, b, rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     double t3 = MPI_Wtime();
 
     if (rank == 0) // Validate results
@@ -80,15 +80,15 @@ int main(int argc, char **argv)
             double target = 0.0;
             for (int j = 0; j < N; j++)
                 target += j * (i + j);
-            error += (target - C[i]) * (target - C[i]);
+            error += (target - b[i]) * (target - b[i]);
         }
 
         printf("%lf\n", error);
     }
 
-    free(C);
-    free(V);
-    free(M);
+    free(b);
+    free(x);
+    free(A);
 
     MPI_Finalize(); // End MPI, called by every processor
     return 0;
