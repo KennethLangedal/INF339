@@ -12,16 +12,19 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank); // get current process id
     MPI_Comm_size(MPI_COMM_WORLD, &size); // get number of processes
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    double t0 = MPI_Wtime();
+    double bt = 1e9, btc1, btf, btc2;
 
-    if (argc != 2)
+    MPI_Barrier(MPI_COMM_WORLD);
+    double ts0 = MPI_Wtime();
+
+    if (argc != 3)
     {
-        printf("Give one argument to use as scale\n");
+        printf("Give two arguments, scale and iterations\n");
         return 1;
     }
 
     int scale = atoi(argv[1]);
+    int n_it = atoi(argv[2]);
 
     size_t N = 1 << scale;
     size_t rows = N / size;
@@ -46,40 +49,58 @@ int main(int argc, char **argv)
         b = (double *)aligned_alloc(32, sizeof(double) * rows);
 
     MPI_Barrier(MPI_COMM_WORLD);
-    double t1 = MPI_Wtime();
+    double ts1 = MPI_Wtime();
 
-    MPI_Bcast(x, N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    double t2 = MPI_Wtime();
+    for (size_t it = 0; it < n_it; it++)
+    {
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        double t0 = MPI_Wtime();
+
+        MPI_Bcast(x, N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        double t1 = MPI_Wtime();
 
 #ifndef AVX
-    for (size_t i = 0; i < rows; i++)
-    {
-        b[i] = 0.0;
-        for (size_t j = 0; j < N; j++)
+        for (size_t i = 0; i < rows; i++)
         {
-            b[i] += A[i * N + j] * x[j];
+            b[i] = 0.0;
+            for (size_t j = 0; j < N; j++)
+            {
+                b[i] += A[i * N + j] * x[j];
+            }
         }
-    }
 #else
-    for (size_t i = 0; i < rows; i++)
-    {
-        v4df c = {0.0, 0.0, 0.0, 0.0};
-        for (size_t j = 0; j < N; j += 4)
+        for (size_t i = 0; i < rows; i++)
         {
-            v4df m = _mm256_load_pd(A + i * N + j);
-            v4df v = _mm256_load_pd(x + j);
+            v4df c = {0.0, 0.0, 0.0, 0.0};
+            for (size_t j = 0; j < N; j += 4)
+            {
+                v4df m = _mm256_load_pd(A + i * N + j);
+                v4df v = _mm256_load_pd(x + j);
 
-            c = m * v + c;
+                c = m * v + c;
+            }
+            b[i] = c[0] + c[1] + c[2] + c[3];
         }
-        b[i] = c[0] + c[1] + c[2] + c[3];
-    }
 #endif
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    double t3 = MPI_Wtime();
+        MPI_Barrier(MPI_COMM_WORLD);
+        double t2 = MPI_Wtime();
 
-    MPI_Gather(b, rows, MPI_DOUBLE, b, rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    double t4 = MPI_Wtime();
+        MPI_Gather(b, rows, MPI_DOUBLE, b, rows, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        double t3 = MPI_Wtime();
+
+        if (rank == 0)
+        {
+            if (t3 - t0 < bt)
+            {
+                bt = t3 - t0;
+                btc1 = t1 - t0;
+                btf = t2 - t1;
+                btc2 = t3 - t2;
+            }
+        }
+    }
 
     if (rank == 0) // Validate results
     {
@@ -92,7 +113,7 @@ int main(int argc, char **argv)
             error += (target - b[i]) * (target - b[i]);
         }
 
-        printf("%lf %lf %lf %lf %lf %lf\n", t4 - t1, t1 - t0, t2 - t1, t3 - t2, t4 - t3, error);
+        printf("%lf %lf %lf %lf %lf %lf\n", bt, btc1, btf, btc2, ts1 - ts0, error);
     }
 
     free(b);
