@@ -1,0 +1,10 @@
+#!/bin/bash
+#SBATCH -p rome16q # partition (queue)
+#SBATCH -t 2-12:00 # time (D-HH:MM)
+#SBATCH -o slurm.%N.%j.out # STDOUT
+#SBATCH -e slurm.%N.%j.err # STDERR
+#SBATCH --exclusive
+
+ulimit -s 200240
+
+srun ./a.out
