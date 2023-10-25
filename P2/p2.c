@@ -47,6 +47,75 @@ mesh init_mesh_4(int scale, double alpha, double beta)
     return m;
 }
 
+void reorder_separators(mesh m, int size, int rows, int *sep, int *old_id)
+{
+    double *tA = malloc(sizeof(double) * nonzero * rows);
+    int *tI = malloc(sizeof(int) * nonzero * rows);
+
+    int *new_id = malloc(sizeof(int) * m.N);
+
+    for (size_t rank = 0; rank < size; rank++)
+    {
+        sep[rank] = 0;
+        for (size_t i = 0; i < rows; i++)
+        {
+            for (size_t j = 0; j < nonzero; j++)
+            {
+                int u = m.I[(rank * rows + i) * nonzero + j];
+                if (u < rank * rows || u >= (rank + 1) * rows)
+                {
+                    sep[rank]++;
+                    break;
+                }
+            }
+        }
+
+        int ti = rank * rows, tj = rank * rows + sep[rank];
+        for (size_t i = 0; i < rows; i++)
+        {
+            int any = 0;
+            int u = i + rank * rows;
+            for (size_t j = 0; j < nonzero; j++)
+            {
+                int v = m.I[(rank * rows + i) * nonzero + j];
+                if (v < rank * rows || v >= (rank + 1) * rows)
+                {
+                    old_id[ti] = u;
+                    new_id[u] = ti;
+                    ti++;
+                    any = 1;
+                    break;
+                }
+            }
+            if (!any)
+            {
+                old_id[tj] = u;
+                new_id[u] = tj;
+                tj++;
+            }
+
+            for (size_t k = 0; k < nonzero; k++)
+                tA[(new_id[u] - rank * rows) * nonzero + k] = m.A[u * nonzero + k];
+
+            for (size_t k = 0; k < nonzero; k++)
+                tI[(new_id[u] - rank * rows) * nonzero + k] = m.I[u * nonzero + k];
+        }
+
+        for (size_t i = 0; i < nonzero * rows; i++)
+            m.A[rank * rows * nonzero + i] = tA[i];
+
+        for (size_t i = 0; i < nonzero * rows; i++)
+            m.I[rank * rows * nonzero + i] = tI[i];
+    }
+
+    for (size_t i = 0; i < m.N * nonzero; i++)
+        m.I[i] = new_id[m.I[i]];
+
+    free(new_id);
+    free(tA);
+    free(tI);
+}
+
 void free_mesh(mesh *m)
 {
     m->N = 0;
@@ -56,10 +125,10 @@ void free_mesh(mesh *m)
 
 void step_ref(mesh m, double *Vold, double *Vnew)
 {
-    for (int i = 0; i < m.N; i++)
+    for (size_t i = 0; i < m.N; i++)
     {
         Vnew[i] = 0.0;
-        for (int j = 0; j < nonzero; j++)
+        for (size_t j = 0; j < nonzero; j++)
             Vnew[i] += m.A[i * nonzero + j] * Vold[m.I[i * nonzero + j]];
     }
 }
@@ -67,10 +136,10 @@ void step_ref(mesh m, double *Vold, double *Vnew)
 void step_par(mesh m, double *Vold, double *Vnew)
 {
 #pragma omp parallel for
-    for (int i = 0.0; i < m.N; i++)
+    for (size_t i = 0.0; i < m.N; i++)
     {
         Vnew[i] = 0.0;
-        for (int j = 0; j < nonzero; j++)
+        for (size_t j = 0; j < nonzero; j++)
             Vnew[i] += m.A[i * nonzero + j] * Vold[m.I[i * nonzero + j]];
 
         // Vnew[i] = m.A[i * nonzero + 0] * Vold[m.I[i * nonzero + 0]] +

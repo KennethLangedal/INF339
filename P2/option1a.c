@@ -50,6 +50,10 @@ int main(int argc, char **argv)
 
     MPI_Barrier(MPI_COMM_WORLD);
     double ts1 = MPI_Wtime();
+
+    if (rank == 0)
+        printf("%lfs for initialization\n", ts1 - ts0);
+
     // -----Initialization end-----
 
     // -----Main program start-----

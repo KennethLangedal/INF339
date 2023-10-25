@@ -10,29 +10,49 @@
 #define alpha 0.7
 #define beta 0.1
 
-void draw_mesh(int scale, double *data)
+void draw_mesh(int scale, double *data, int *old_id)
 {
     int N = 1 << scale;
 
-    for (int i = 0; i < N; i++)
+    for (int t = 0; t < N * N; t++)
     {
-        for (int j = 0; j < N; j++)
-        {
-            int c = log2(data[i * N + j]) * 8;
-            if (c > 255)
-                c = 255;
-            if (c < 0)
-                c = 0;
-            gfx_color(0, c, c);
-            int y = i * W;
-            int x = (j / 2) * W;
+        int i = old_id[t] / N;
+        int j = old_id[t] % N;
 
-            if ((j & 1) == 0)
-                gfx_fill_triangle(x, y, x + W, y + W, x, y + W);
-            else
-                gfx_fill_triangle(x, y, x + W, y, x + W, y + W);
-        }
+        int c = log2(data[t]) * 8;
+        if (c > 255)
+            c = 255;
+        if (c < 0)
+            c = 0;
+        gfx_color(0, c, c);
+        int y = i * W;
+        int x = (j / 2) * W;
+
+        if ((j & 1) == 0)
+            gfx_fill_triangle(x, y, x + W, y + W, x, y + W);
+        else
+            gfx_fill_triangle(x, y, x + W, y, x + W, y + W);
     }
+
+    // for (int i = 0; i < N; i++)
+    // {
+    //     for (int j = 0; j < N; j++)
+    //     {
+    //         int c = log2(data[i * N + j]) * 8;
+    //         if (c > 255)
+    //             c = 255;
+    //         if (c < 0)
+    //             c = 0;
+    //         gfx_color(0, c, c);
+    //         int y = i * W;
+    //         int x = (j / 2) * W;
+
+    //         if ((j & 1) == 0)
+    //             gfx_fill_triangle(x, y, x + W, y + W, x, y + W);
+    //         else
+    //             gfx_fill_triangle(x, y, x + W, y, x + W, y + W);
+    //     }
+    // }
 }
 
 int main(int argc, char **argv)
@@ -64,17 +84,31 @@ int main(int argc, char **argv)
 
     mesh m = init_mesh_4(scale, alpha, beta);
 
+    int size = 4;
+    int *old_id = malloc(sizeof(int) * m.N);
+    int *sep = malloc(sizeof(int) * size);
+
+    reorder_separators(m, size, m.N / size, sep, old_id);
+
+    for (int i = 0; i < size; i++)
+        printf("%d\n", sep[i]);
+
+    int center = 0;
+    for (int i = 0; i < m.N; i++)
+        if (old_id[i] == m.N / 2 + N / 2)
+            center = i;
+
     for (int i = 0; i < 1000000; i++)
     {
         if ((i % 1000) == 0)
         {
-            Vnew[m.N / 2 + N / 2] = INT_MAX;
+            Vnew[center] = INT_MAX;
             // Vnew[m.N - 1] = INT_MAX;
         }
 
-        draw_mesh(scale, Vnew);
+        draw_mesh(scale, Vnew, old_id);
         gfx_flush();
-        // usleep(10);
+        // sleep(1);
 
         double *tmp = Vnew;
         Vnew = Vold;

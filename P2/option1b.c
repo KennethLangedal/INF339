@@ -38,9 +38,29 @@ int main(int argc, char **argv)
     double *A = aligned_alloc(32, sizeof(double) * rows * nonzero);
     int *I = aligned_alloc(16, sizeof(int) * rows * nonzero);
 
+    int *sep = malloc(sizeof(int) * size);
+
     mesh m;
+    int start_id = 0;
     if (rank == 0)
+    {
         m = init_mesh_4(scale, alpha, beta);
+        int *old_id = malloc(sizeof(int) * m.N);
+
+        reorder_separators(m, size, rows, sep, old_id);
+        for (int i = 0; i < m.N; i++)
+        {
+            if (old_id[i] == 0)
+            {
+                start_id = i;
+                break;
+            }
+        }
+
+        free(old_id);
+    }
+
+    MPI_Bcast(sep, size, MPI_INT, 0, MPI_COMM_WORLD);
 
     MPI_Scatter(m.A, rows * nonzero, MPI_DOUBLE, A, rows * nonzero, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     MPI_Scatter(m.I, rows * nonzero, MPI_INT, I, rows * nonzero, MPI_INT, 0, MPI_COMM_WORLD);
@@ -64,7 +84,8 @@ int main(int argc, char **argv)
         for (int i = 0; i < N; i++)
             Vn[i] = 0.0;
 
-        Vo[0] = 0xffffff;
+        if (rank == 0)
+            Vo[start_id] = 0xffffff;
 
         double tcomm = 0.0, tcomp = 0.0;
 
@@ -77,21 +98,12 @@ int main(int argc, char **argv)
             {
                 double tc1 = MPI_Wtime();
 
-                // for (int j = 0; j < rows; j++)
-                // {
-                //     Vn[rank * rows + j] = 0.0;
-                //     for (int k = 0; k < nonzero; k++)
-                //     {
-                //         Vn[rank * rows + j] += A[j * nonzero + k] * Vo[I[j * nonzero + k]];
-                //     }
-                // }
-
 #pragma omp for
-                for (int j = 0; j < rows; j += 4)
+                for (size_t j = 0; j < rows; j += 4)
                 {
                     v4df z = {0.0, 0.0, 0.0, 0.0};
 
-                    for (int k = 0; k < 4; k++)
+                    for (size_t k = 0; k < 4; k++)
                         z[k] = A[(j + k) * nonzero + 0] * Vo[I[(j + k) * nonzero + 0]] +
                                A[(j + k) * nonzero + 1] * Vo[I[(j + k) * nonzero + 1]] +
                                A[(j + k) * nonzero + 2] * Vo[I[(j + k) * nonzero + 2]] +
@@ -105,7 +117,12 @@ int main(int argc, char **argv)
                     MPI_Barrier(MPI_COMM_WORLD);
                     double tc2 = MPI_Wtime();
 
-                    MPI_Allgather(Vn + rank * rows, rows, MPI_DOUBLE, Vo, rows, MPI_DOUBLE, MPI_COMM_WORLD);
+                    for (int j = 0; j < size; j++)
+                        MPI_Bcast(Vn + rows * j, sep[j], MPI_DOUBLE, j, MPI_COMM_WORLD);
+
+                    double *t = Vn;
+                    Vn = Vo;
+                    Vo = t;
 
                     MPI_Barrier(MPI_COMM_WORLD);
                     double tc3 = MPI_Wtime();
@@ -120,11 +137,13 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
         double t1 = MPI_Wtime();
 
+        MPI_Allgather(Vo + rank * rows, rows, MPI_DOUBLE, Vn, rows, MPI_DOUBLE, MPI_COMM_WORLD);
+
         // Compute L2 and GLOPS
 
         double l2 = 0.0;
         for (int j = 0; j < N; j++)
-            l2 += Vo[j] * Vo[j];
+            l2 += Vn[j] * Vn[j];
 
         l2 = sqrt(l2);
 
@@ -133,8 +152,12 @@ int main(int argc, char **argv)
 
         if (rank == 0)
         {
+            int comm_size = 0;
+            for (int j = 0; j < size; j++)
+                comm_size += sep[j];
+
             printf("%lfs (%lfs, %lfs), %lf GFLOPS, %lf GBs mem, %lf GBs comm, L2 = %lf\n",
-                   time, tcomp, tcomm, (ops / time) / 1e9, (N * 64.0 * 100.0 / tcomp) / 1e9, ((rows * (size - 1)) * 8.0 * size * 100.0 / tcomm) / 1e9, l2);
+                   time, tcomp, tcomm, (ops / time) / 1e9, (N * 64.0 * 100.0 / tcomp) / 1e9, (comm_size * size * 8.0 * 100.0 / tcomm) / 1e9, l2);
         }
     }
 
