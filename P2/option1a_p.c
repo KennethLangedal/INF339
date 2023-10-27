@@ -3,6 +3,7 @@
 #include <mpi.h> // MPI header file
 #include <math.h>
 #include <immintrin.h>
+#include <limits.h>
 #include "p2.h"
 
 #define alpha 0.7
@@ -64,7 +65,8 @@ int main(int argc, char **argv)
         for (int i = 0; i < N; i++)
             Vn[i] = 0.0;
 
-        Vo[0] = 0xffffff;
+        for (int i = 0; i < (1 << scale); i += 10)
+            Vo[i * (1 << scale) + i] = 1.0;
 
         double tcomm = 0.0, tcomp = 0.0;
 
@@ -134,7 +136,11 @@ int main(int argc, char **argv)
         if (rank == 0)
         {
             printf("%lfs (%lfs, %lfs), %lf GFLOPS, %lf GBs mem, %lf GBs comm, L2 = %lf\n",
-                   time, tcomp, tcomm, (ops / time) / 1e9, (N * 64.0 * 100.0 / tcomp) / 1e9, ((rows * (size - 1)) * 8.0 * size * 100.0 / tcomm) / 1e9, l2);
+                   time, tcomp, tcomm,
+                   (ops / time) / 1e9,
+                   (N * 64.0 * 100.0 / tcomp) / 1e9,
+                   ((rows * (size - 1)) * 8.0 * size * 100.0 / tcomm) / 1e9,
+                   l2);
         }
     }
 

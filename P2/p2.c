@@ -47,12 +47,10 @@ mesh init_mesh_4(int scale, double alpha, double beta)
     return m;
 }
 
-void reorder_separators(mesh m, int size, int rows, int *sep, int *old_id)
+void reorder_separators(mesh m, int size, int rows, int *sep, int *old_id, int *new_id)
 {
     double *tA = malloc(sizeof(double) * nonzero * rows);
     int *tI = malloc(sizeof(int) * nonzero * rows);
-
-    int *new_id = malloc(sizeof(int) * m.N);
 
     for (size_t rank = 0; rank < size; rank++)
     {
@@ -111,7 +109,6 @@ void reorder_separators(mesh m, int size, int rows, int *sep, int *old_id)
     for (size_t i = 0; i < m.N * nonzero; i++)
         m.I[i] = new_id[m.I[i]];
 
-    free(new_id);
     free(tA);
     free(tI);
 }

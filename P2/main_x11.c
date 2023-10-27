@@ -86,23 +86,17 @@ int main(int argc, char **argv)
 
     int size = 4;
     int *old_id = malloc(sizeof(int) * m.N);
+    int *new_id = malloc(sizeof(int) * m.N);
     int *sep = malloc(sizeof(int) * size);
 
-    reorder_separators(m, size, m.N / size, sep, old_id);
-
-    for (int i = 0; i < size; i++)
-        printf("%d\n", sep[i]);
-
-    int center = 0;
-    for (int i = 0; i < m.N; i++)
-        if (old_id[i] == m.N / 2 + N / 2)
-            center = i;
+    reorder_separators(m, size, m.N / size, sep, old_id, new_id);
 
     for (int i = 0; i < 1000000; i++)
     {
         if ((i % 1000) == 0)
         {
-            Vnew[center] = INT_MAX;
+            for (int j = 0; j < N; j += 10)
+                Vnew[new_id[j * N + j]] = INT_MAX;
             // Vnew[m.N - 1] = INT_MAX;
         }
 

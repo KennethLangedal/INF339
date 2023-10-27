@@ -39,9 +39,9 @@ int main(int argc, char **argv)
     int *I = aligned_alloc(16, sizeof(int) * rows * nonzero);
 
     int *sep = malloc(sizeof(int) * size);
+    int *new_id = malloc(sizeof(int) * N);
 
     mesh m;
-    int *new_id = malloc(sizeof(int) * N);
     if (rank == 0)
     {
         m = init_mesh_4(scale, alpha, beta);
@@ -60,6 +60,51 @@ int main(int argc, char **argv)
 
     double *Vo = aligned_alloc(32, sizeof(double) * N);
     double *Vn = aligned_alloc(32, sizeof(double) * N);
+
+    // Find send/recieve start/end for each pair
+    int *to_first = malloc(sizeof(int) * size);
+    int *to_last = malloc(sizeof(int) * size);
+    int *from_first = malloc(sizeof(int) * size);
+    int *from_last = malloc(sizeof(int) * size);
+
+    for (int i = 0; i < size; i++)
+    {
+        to_first[i] = rank * rows + sep[i];
+        to_last[i] = rank * rows;
+    }
+    for (size_t i = 0; i < sep[rank]; i++)
+    {
+        int u = rank * rows + i;
+        for (size_t j = 0; j < nonzero; j++)
+        {
+            int v = I[i * nonzero + j];
+            int v_rank = v / rows;
+            if (v_rank != rank)
+            {
+                to_first[v_rank] = to_first[v_rank] > u ? u : to_first[v_rank];
+                to_last[v_rank] = to_last[v_rank] <= u ? u + 1 : to_last[v_rank];
+            }
+        }
+    }
+
+    for (int i = 0; i < size; i++)
+    {
+        if (i == rank)
+        {
+            for (int j = 0; j < size; j++)
+            {
+                if (j == rank)
+                    continue;
+                MPI_Send(to_first + j, 1, MPI_INT, j, 0, MPI_COMM_WORLD);
+                MPI_Send(to_last + j, 1, MPI_INT, j, 0, MPI_COMM_WORLD);
+            }
+        }
+        else
+        {
+            MPI_Recv(from_first + i, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
+            MPI_Recv(from_last + i, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
+        }
+    }
 
     MPI_Barrier(MPI_COMM_WORLD);
     double ts1 = MPI_Wtime();
@@ -110,8 +155,25 @@ int main(int argc, char **argv)
                     MPI_Barrier(MPI_COMM_WORLD);
                     double tc2 = MPI_Wtime();
 
+                    MPI_Request sends[size], receives[size];
+
                     for (int j = 0; j < size; j++)
-                        MPI_Bcast(Vn + rows * j, sep[j], MPI_DOUBLE, j, MPI_COMM_WORLD);
+                    {
+                        if (j != rank && to_first[j] < to_last[j])
+                            MPI_Isend(Vn + to_first[j], to_last[j] - to_first[j], MPI_DOUBLE, j, 0, MPI_COMM_WORLD, &sends[j]);
+
+                        if (j != rank && from_first[j] < from_last[j])
+                            MPI_Irecv(Vn + from_first[j], from_last[j] - from_first[j], MPI_DOUBLE, j, 0, MPI_COMM_WORLD, &receives[j]);
+                    }
+
+                    for (int j = 0; j < size; j++)
+                    {
+                        if (j != rank && to_first[j] < to_last[j])
+                            MPI_Wait(&sends[j], MPI_STATUS_IGNORE);
+
+                        if (j != rank && from_first[j] < from_last[j])
+                            MPI_Wait(&receives[j], MPI_STATUS_IGNORE);
+                    }
 
                     double *t = Vn;
                     Vn = Vo;
@@ -143,18 +205,34 @@ int main(int argc, char **argv)
         double ops = (long long)m.N * 8ll * 100ll; // 4 multiplications and 4 additions
         double time = t1 - t0;
 
+        // Comm size
+        int send_count = 0;
+        for (int j = 0; j < size; j++)
+        {
+            if (j != rank && to_first[j] < to_last[j])
+                send_count += to_last[j] - to_first[j];
+        }
+
         if (rank == 0)
         {
-            int comm_size = 0;
+            int *send_counts = malloc(sizeof(int) * size);
+            MPI_Gather(&send_count, 1, MPI_INT, send_counts, 1, MPI_INT, 0, MPI_COMM_WORLD);
+            int total_comm = 0;
             for (int j = 0; j < size; j++)
-                comm_size += sep[j];
+                total_comm += send_counts[j];
 
             printf("%lfs (%lfs, %lfs), %lf GFLOPS, %lf GBs mem, %lf GBs comm, L2 = %lf\n",
                    time, tcomp, tcomm,
                    (ops / time) / 1e9,
                    (N * 64.0 * 100.0 / tcomp) / 1e9,
-                   (comm_size * (size - 1) * 8.0 * 100.0 / tcomm) / 1e9,
+                   (total_comm * 8.0 * 100.0 / tcomm) / 1e9,
                    l2);
+
+            free(send_counts);
+        }
+        else
+        {
+            MPI_Gather(&send_count, 1, MPI_INT, NULL, 1, MPI_INT, 0, MPI_COMM_WORLD);
         }
     }
 

@@ -11,7 +11,7 @@ typedef struct
 
 mesh init_mesh_4(int scale, double alpha, double beta);
 
-void reorder_separators(mesh m, int size, int rows, int *sep, int *old_id);
+void reorder_separators(mesh m, int size, int rows, int *sep, int *old_id, int *new_id);
 
 void free_mesh(mesh *m);
 
