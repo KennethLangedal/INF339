@@ -4,7 +4,7 @@ CC = mpicc
 INCLUDE_DIRECTORIES = include
 SRC_DIRECTORIES = src
 CFLAGS = -std=gnu17 -O3 -march=native -ffast-math -D_GNU_SOURCE -fopenmp -MMD $(addprefix -I ,$(INCLUDE_DIRECTORIES))
-LDFLAGS = -lm
+LDFLAGS = -lm -lmetis
 OBJECTS = mtx.o main.o
 TARGET = main
 DEPS = $(OBJECTS:.o=.d)

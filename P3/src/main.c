@@ -1,5 +1,9 @@
 #include "mtx.h"
+#include <stdlib.h>
+#include <metis.h>
 #include <mpi.h> // MPI header file
+
+// TODO, fix possible e-16 in float parsing
 
 int main(int argc, char **argv)
 {
@@ -14,10 +18,19 @@ int main(int argc, char **argv)
 
     sort_edges(g);
 
+    printf("%d %d\n", g.N, g.M);
+
     if (!validate_graph(g))
         printf("Error in graph\n");
 
-    
+    int ncon = 1;
+    int k = 4;
+    int objval;
+    int *part = malloc(sizeof(int) * g.N);
+    METIS_PartGraphKway(&g.N, &ncon, g.V, g.E, NULL, NULL, NULL, &k, NULL, NULL, NULL, &objval, part);
+
+    printf("%d\n", objval);
+    free(part);
 
     free_graph(&g);
 
