@@ -89,11 +89,11 @@ int main(int argc, char **argv)
                 // }
 
 #pragma omp for
-                for (int j = 0; j < rows; j += 4)
+                for (size_t j = 0; j < rows; j += 4)
                 {
                     v4df z = {0.0, 0.0, 0.0, 0.0};
 
-                    for (int k = 0; k < 4; k++)
+                    for (size_t k = 0; k < 4; k++)
                         z[k] = A[(j + k) * nonzero + 0] * Vo[I[(j + k) * nonzero + 0]] +
                                A[(j + k) * nonzero + 1] * Vo[I[(j + k) * nonzero + 1]] +
                                A[(j + k) * nonzero + 2] * Vo[I[(j + k) * nonzero + 2]] +

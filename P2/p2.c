@@ -12,7 +12,7 @@ mesh init_mesh_4(int scale, double alpha, double beta)
     m.A = aligned_alloc(32, sizeof(double) * m.N * 4);
     m.I = aligned_alloc(16, sizeof(int) * m.N * 4);
 
-    for (int i = 0; i < m.N; i++)
+    for (size_t i = 0; i < m.N; i++)
     {
         m.A[i * 4] = beta;
         m.A[i * 4 + 1] = beta;
