@@ -14,4 +14,6 @@ void free_graph(graph *g);
 
 void sort_edges(graph g);
 
+void normalize_graph(graph g);
+
 int validate_graph(graph g);
