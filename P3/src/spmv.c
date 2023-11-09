@@ -3,11 +3,14 @@
 #include <metis.h>
 #include <string.h>
 
-void spmv(graph g, double *x, double *y) {
+void spmv(graph g, double *x, double *y)
+{
 #pragma omp parallel for schedule(dynamic, 1024)
-    for (int u = 0; u < g.N; u++) {
+    for (int u = 0; u < g.N; u++)
+    {
         double z = 0.0;
-        for (int i = g.V[u]; i < g.V[u + 1]; i++) {
+        for (int i = g.V[u]; i < g.V[u + 1]; i++)
+        {
             int v = g.E[i];
             z += x[v] * g.A[i];
         }
@@ -15,7 +18,30 @@ void spmv(graph g, double *x, double *y) {
     }
 }
 
-void partition_graph(graph g, int k, int *p, double *x) {
+void spmv_part(graph g, int s, int t, double *x, double *y)
+{
+#pragma omp parallel for schedule(dynamic, 1024)
+    for (int u = s; u < t; u++)
+    {
+        double z = 0.0;
+        for (int i = g.V[u]; i < g.V[u + 1]; i++)
+        {
+            int v = g.E[i];
+            z += x[v] * g.A[i];
+        }
+        y[u] = z;
+    }
+}
+
+void partition_graph(graph g, int k, int *p, double *x)
+{
+    if (k == 1)
+    {
+        p[0] = 0;
+        p[1] = g.N;
+        return;
+    }
+
     int ncon = 1;
     int objval;
     real_t ubvec = 1.01;
@@ -26,9 +52,12 @@ void partition_graph(graph g, int k, int *p, double *x) {
     int *old_id = malloc(sizeof(int) * g.N);
     int id = 0;
     p[0] = 0;
-    for (int r = 0; r < k; r++) {
-        for (int i = 0; i < g.N; i++) {
-            if (part[i] == r) {
+    for (int r = 0; r < k; r++)
+    {
+        for (int i = 0; i < g.N; i++)
+        {
+            if (part[i] == r)
+            {
                 old_id[id] = i;
                 new_id[i] = id++;
             }
@@ -38,21 +67,25 @@ void partition_graph(graph g, int k, int *p, double *x) {
 
     int *new_V = malloc(sizeof(int) * (g.N + 1));
     int *new_E = malloc(sizeof(int) * g.M);
-    int *new_A = malloc(sizeof(double) * g.M);
+    double *new_A = malloc(sizeof(double) * g.M);
 
-    new_id[0] = 0;
-    for (int i = 0; i < g.N; i++) {
-        new_V[i + 1] = new_V[i] + (g.V[old_id[i] + 1] - g.V[old_id[i]]);
-        memcpy(new_E + new_V[i], g.E + g.V[old_id[i]], sizeof(int) * (new_V[i + 1] - new_V[i]));
-        memcpy(new_A + new_V[i], g.A + g.V[old_id[i]], sizeof(double) * (new_V[i + 1] - new_V[i]));
+    new_V[0] = 0;
+    for (int i = 0; i < g.N; i++)
+    {
+        int d = g.V[old_id[i] + 1] - g.V[old_id[i]];
+        new_V[i + 1] = new_V[i] + d;
+        memcpy(new_E + new_V[i], g.E + g.V[old_id[i]], sizeof(int) * d);
+        memcpy(new_A + new_V[i], g.A + g.V[old_id[i]], sizeof(double) * d);
 
-        for (int j = new_V[i]; j < new_V[i + 1]; j++) {
+        for (int j = new_V[i]; j < new_V[i + 1]; j++)
+        {
             new_E[j] = new_id[new_E[j]];
         }
     }
 
     double *new_X = malloc(sizeof(double) * g.N);
-    for (int i = 0; i < g.N; i++) {
+    for (int i = 0; i < g.N; i++)
+    {
         new_X[i] = x[old_id[i]];
     }
 
@@ -65,6 +98,7 @@ void partition_graph(graph g, int k, int *p, double *x) {
     free(new_V);
     free(new_E);
     free(new_A);
+    free(new_X);
 
     free(new_id);
     free(old_id);
