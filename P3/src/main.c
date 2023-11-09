@@ -4,7 +4,8 @@
 #include <math.h>
 #include <mpi.h> // MPI header file
 
-// TODO, fix possible e-16 in float parsing
+// #define COMP_ONLY
+// #define COMM_ONLY
 
 int main(int argc, char **argv)
 {
@@ -138,6 +139,9 @@ int main(int argc, char **argv)
 
     // Finished computing send/recieve lists
 
+    if (rank == 0)
+        printf("GFLOPS GFLOP GBs_mem GBs_net GB_net t L2\n");
+
     // Main loop start
     for (int e = 0; e < 3; e++)
     {
@@ -156,8 +160,11 @@ int main(int argc, char **argv)
 
         for (int t = 0; t < 100; t++)
         {
+#ifndef COMM_ONLY
             spmv_part(g, pV[rank], pV[rank + 1], x, y);
+#endif
 
+#ifndef COMP_ONLY
             for (int i = 0; i < size; i++)
             {
                 if (send_count[i] == 0)
@@ -196,6 +203,7 @@ int main(int argc, char **argv)
                     continue;
                 MPI_Wait(&send_requests[i], MPI_STATUS_IGNORE);
             }
+#endif
 
             double *tmp = x;
             x = y;
@@ -236,10 +244,13 @@ int main(int argc, char **argv)
 
             double comm = total_comm * 8;
 
-            printf("%.3lf %.3lf %.3lf %.3lf\n",
+            printf("%.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf\n",
                    (ops / (t1 - t0)) / 1e9,
+                   ops / 1e9,
                    (data / (t1 - t0)) / 1e9,
                    (comm / (t1 - t0)) / 1e9,
+                   comm / 1e9,
+                   (t1 - t0),
                    L2);
         }
         else
