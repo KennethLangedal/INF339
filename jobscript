@@ -17,6 +17,7 @@ module load libfabric/gcc/1.18.0
 module load openmpi4/gcc/4.1.2
 module load libevent/2.1.12-stable
 module load cuda11.8/toolkit/11.8.0
+module load metis
 
 export OMPI_MCA_pml="^ucx"
 export OMPI_MCA_btl_openib_if_include="mlx5_1:1"
@@ -31,6 +32,7 @@ export MV2_ENABLE_AFFINITY=0
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
-ulimit -s 200240
+#srun --mpi=pmi2 -n $SLURM_NTASKS ./main /global/D1/projects/mtx/datasets/suitesparse/JGD_GL7d/GL7d19/GL7d19.mtx
 
-srun --mpi=pmi2 -n $SLURM_NTASKS ./main /global/D1/projects/UiB-INF339/matrices/
+mpirun -np $SLURM_NTASKS --bind-to none ./main /global/D1/projects/mtx/datasets/suitesparse/JGD_GL7d/GL7d19/GL7d19.mtx
+
