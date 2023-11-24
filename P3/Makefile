@@ -3,9 +3,9 @@ SHELL = /bin/bash
 CC = mpicc
 INCLUDE_DIRECTORIES = include
 SRC_DIRECTORIES = src
-CFLAGS = -std=gnu17 -O3 -march=native -ffast-math -D_GNU_SOURCE -fopenmp -MMD $(addprefix -I ,$(INCLUDE_DIRECTORIES))
+CFLAGS = -g -std=gnu17 -O3 -march=native -ffast-math -D_GNU_SOURCE -fopenmp -MMD $(addprefix -I ,$(INCLUDE_DIRECTORIES))
 LDFLAGS = -lm -lmetis
-OBJECTS = mtx.o spmv.o main.o
+OBJECTS = mtx.o spmv.o main_min.o
 TARGET = main
 DEPS = $(OBJECTS:.o=.d)
 vpath %.c $(SRC_DIRECTORIES)

@@ -172,11 +172,9 @@ void internal_free_mtx(mtx *m)
     m->L = 0;
     free(m->I);
     free(m->J);
+    free(m->A);
     m->I = NULL;
     m->J = NULL;
-
-    if (m->A != NULL)
-        free(m->A);
     m->A = NULL;
 }
 
@@ -220,6 +218,22 @@ graph parse_mtx(FILE *f)
     }
 
     internal_free_mtx(&m);
+
+    return g;
+}
+
+graph parse_and_validate_mtx(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    graph g = parse_mtx(f);
+    fclose(f);
+
+    printf("|V|=%d |E|=%d\n", g.N, g.M);
+
+    normalize_graph(g);
+    sort_edges(g);
+    if (!validate_graph(g))
+        printf("Error in graph\n");
 
     return g;
 }
@@ -280,6 +294,14 @@ void normalize_graph(graph g)
     {
         mean += g.A[i];
     }
+
+    if (mean == 0.0) // All zero input
+    {
+        for (int i = 0; i < g.M; i++)
+            g.A[i] = 2.0;
+        return;
+    }
+
     mean /= (double)g.M;
 
     double std = 0.0;
