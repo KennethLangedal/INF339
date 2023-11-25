@@ -115,6 +115,8 @@ void partition_graph_naive(graph g, int s, int t, int k, int *p)
         if ((g.V[u] - g.V[s]) >= edges_per * id)
             p[id++] = u;
     }
+    while (id <= k)
+        p[id++] = t;
     p[k] = t;
 }
 
