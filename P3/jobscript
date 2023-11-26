@@ -1,0 +1,23 @@
+#!/bin/bash
+
+#SBATCH -p rome16q # partition (queue)
+#SBATCH -e /dev/null
+#SBATCH --exclusive
+#SBATCH -t 0-06:00 # time (D-HH:MM)
+
+ulimit -s 10240
+
+module purge
+module load gcc/11.2.0
+module load openmpi4/gcc/4.1.2
+module load metis
+
+export OMP_NUM_THREADS=32
+
+make
+
+for file in $(find /global/D1/projects/UiB-INF339/matrices/ | grep .mtx)
+do
+	echo $(basename $file)
+	./main $file 1 2 4 8 16 32
+done

@@ -221,6 +221,41 @@ mtx internal_parse_mtx(FILE *f)
     return m;
 }
 
+mtx internal_parse_mtx_seq(FILE *f)
+{
+    char *line = NULL;
+    size_t size = 0, rc = 0, p = 0;
+    rc = getline(&line, &size, f);
+    mtx m = internal_parse_mtx_header(line, &p);
+    rc = getline(&line, &size, f);
+
+    while (line[0] == '%')
+        rc = getline(&line, &size, f);
+
+    p = 0;
+    parse_int(line, &p, &m.M);
+    parse_int(line, &p, &m.N);
+    parse_int(line, &p, &m.L);
+
+    m.I = malloc(sizeof(int) * m.L);
+    m.J = malloc(sizeof(int) * m.L);
+    m.A = malloc(sizeof(double) * m.L);
+
+    for (int i = 0; i < m.L; i++)
+    {
+        rc = getline(&line, &size, f);
+        p = 0;
+
+        parse_int(line, &p, m.I + i);
+        parse_int(line, &p, m.J + i);
+        parse_real(line, &p, m.A + i);
+    }
+
+    free(line);
+
+    return m;
+}
+
 void internal_free_mtx(mtx *m)
 {
     m->symmetry = GENERAL;
@@ -237,7 +272,7 @@ void internal_free_mtx(mtx *m)
 
 graph parse_mtx(FILE *f)
 {
-    mtx m = internal_parse_mtx(f);
+    mtx m = internal_parse_mtx_seq(f);
 
     graph g;
     g.N = m.N > m.M ? m.N : m.M;
